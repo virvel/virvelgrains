@@ -9,6 +9,10 @@ void Pooper::init(float * buffer, int32_t numSamples) {
     m_length = numSamples/4;
     m_speed = 1.0f;
     prevSample = 0.f;
+    
+    for (size_t i = 0; i < 8; ++i) {
+        window[i] = (float(i)+1.f)/8.f;
+    }
 }
 
 void Pooper::process() {
@@ -18,6 +22,7 @@ void Pooper::process() {
 void Pooper::setDelayTime(float t) {
     m_delayTime = t;
     m_length = static_cast<uint32_t>(t*48000.f);
+    
 }
 
 void Pooper::setSpeed(float speed) {
@@ -36,14 +41,16 @@ const float Pooper::read() {
     return readf(m_pos); 
 }
 
-const float Pooper::readf(float pos) {
+inline const float Pooper::readf(float pos) {
     int32_t int_pos = static_cast<int32_t>(pos);
     m_frac = pos  - static_cast<float>(int_pos);
-    
-    
     float a = m_rPtr[((int_pos) % m_length) + m_offset];
     float b = m_rPtr[(int_pos + 1) % m_length + m_offset];        
     prevSample = m_frac * (b-prevSample) + a; 
+    if (int_pos < 8) 
+        return window[int_pos] * prevSample; 
+    else if ((m_length - int_pos) < 8)
+        return  window[m_length - int_pos] * prevSample;
     return prevSample;
 
 }

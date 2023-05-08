@@ -45,7 +45,7 @@ const float Pooper::read() {
 
 const float Pooper::readf(float pos) {
     int32_t int_pos = static_cast<int32_t>(pos);
-    m_frac = pos  - static_cast<float>(int_pos);
+    m_frac = pos  - static_cast<float>(int_pos) - 0.5;
     lagrange(pos);
     float a = coeffs[0]*m_rPtr[((int_pos - 1) % m_length) + m_offset];
     float b = coeffs[1]*m_rPtr[(int_pos ) % m_length + m_offset];        

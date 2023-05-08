@@ -12,8 +12,8 @@ namespace daisysp {
             void setDelayTime(float seconds);
             void setSpeed(float speed);
             void setOffset(float offset);
-            const float readf(float pos);
             const float read();
+            const float readf(float pos);
 
         private:
             float * m_buffer;
@@ -26,7 +26,7 @@ namespace daisysp {
             float m_pos;
             int32_t m_offset;
             float prevSample;
-            float coeffs[4];
+            float window[8];  
     };
 
 }
