@@ -1,14 +1,17 @@
 #include "daisy_patch.h"
 #include "daisysp.h"
 #include "pooper.h"
+#include "splash.h"
 
 using namespace daisy;
 using namespace daisysp;
+
 
 struct looperparams {
     float speed = 1.f;
     float size = 1000.f;
     float offset = 0.f;
+    float volume = 1.f;
 }; 
 
 enum DISPLAYVALS {
@@ -46,9 +49,9 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
         buffer[n] = in[0][i];
         }
         n = (n + 1) % BUFFER_SIZE;
-        out[0][i] = poopers[0].read();        
-        out[0][i] += poopers[1].read();        
-        out[0][i] += poopers[2].read();        
+        out[0][i] = loopers[0].volume * poopers[0].read();        
+        out[0][i] += loopers[1].volume * poopers[1].read();        
+        out[0][i] += loopers[2].volume * poopers[2].read();        
         rev.Process(out[0][i], out[0][i], &revL, &revR);
         out[1][i] = out[0][i];
         out[0][i] += revL;
@@ -70,13 +73,13 @@ void UpdateControls() {
         {
             loopers[looper].speed = patch.GetKnobValue((DaisyPatch::Ctrl)0)*2.f;
             loopers[looper].size = patch.GetKnobValue((DaisyPatch::Ctrl)1)*2.f;
+            loopers[looper].volume = patch.GetKnobValue((DaisyPatch::Ctrl)3);
             float ctrlOffset = patch.GetKnobValue((DaisyPatch::Ctrl)2);
 
             poopers[looper].setSpeed(loopers[looper].speed); 
             poopers[looper].setDelayTime(loopers[looper].size); 
             if (abs(lastOffset-ctrlOffset) > 0.001) {
                 lastOffset = ctrlOffset;
-                //loopers[looper].offset = float(int(1000.f*lastOffset)/1000.f);
                 loopers[looper].offset = lastOffset;
                 poopers[looper].setOffset(loopers[looper].offset); 
             }
@@ -129,6 +132,10 @@ void UpdateOled() {
             patch.display.SetCursor(70, 15);
             str = std::to_string(int(loopers[looper].offset * 1000)) + "ms";
             patch.display.WriteString(cstr, Font_6x8, true);
+
+            patch.display.SetCursor(70, 0);
+            str = std::to_string(int(loopers[looper].volume * 100)) + "%";
+            patch.display.WriteString(cstr, Font_6x8, true);
     
             //patch.display.SetCursor(0, 20);
             int f = BUFFER_SIZE / 128;
@@ -166,16 +173,40 @@ void UpdateOled() {
     
     patch.display.Update();
 }
+void DrawSplash() {
+
+        uint32_t i, b, j;
+        uint32_t currentX_ = 10;
+        uint32_t currentY_ = 8;
+
+        for(i = 0; i < 808; i++)
+        {
+            b = tema[i];
+            uint32_t f = i/101;
+              for(j = 0; j < 8; j++)
+              {
+                  if((b << j) & 0x80) {
+                    patch.display.DrawPixel(currentX_ + i%101, currentY_ + 8*f-j, true);
+                  }
+                  else {
+                    patch.display.DrawPixel(currentX_ + i%101, currentY_ + 8*f-j, false);
+                  }
+              }
+        }
+}
 
 int main(void)
 {
 	patch.Init();
     memset((float *)&buffer[0],0.f, BUFFER_SIZE);
-	patch.SetAudioBlockSize(4); // number of samples handled per callback
+	patch.SetAudioBlockSize(16); // number of samples handled per callback
 	patch.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
     rev.Init(48000);
     rev.SetLpFreq(10000); 
-    
+   
+    DrawSplash();
+    patch.display.Update(); 
+    patch.DelayMs(5000);
 
     poopers[0].init(&buffer[0], 960000);
     poopers[1].init(&buffer[0], 960000);

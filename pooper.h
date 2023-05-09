@@ -13,14 +13,13 @@ namespace daisysp {
             void setSpeed(float speed);
             void setOffset(float offset);
             const float read();
-            const float readf(float pos);
+            const float readf(float pos, int32_t offset);
 
         private:
             float * m_buffer;
             float * m_rPtr;
             int32_t m_numSamples;
             uint32_t m_length;
-            float m_delayTime;
             float m_speed;
             float m_frac;
             float m_pos;

@@ -20,7 +20,6 @@ void Pooper::process() {
 }
 
 void Pooper::setDelayTime(float t) {
-    m_delayTime = t;
     m_length = static_cast<uint32_t>(t*48000.f);
     
 }
@@ -38,14 +37,16 @@ void Pooper::setOffset(float offset) {
 
 const float Pooper::read() {
     process();
-    return readf(m_pos); 
+    float pos = m_pos;
+    int32_t offset = m_offset;
+    return readf(pos, offset); 
 }
 
-inline const float Pooper::readf(float pos) {
+inline const float Pooper::readf(float pos, int32_t offset) {
     int32_t int_pos = static_cast<int32_t>(pos);
     m_frac = pos  - static_cast<float>(int_pos);
-    float a = m_rPtr[((int_pos) % m_length) + m_offset];
-    float b = m_rPtr[(int_pos + 1) % m_length + m_offset];        
+    float a = m_rPtr[((int_pos) % m_length) + offset];
+    float b = m_rPtr[(int_pos + 1) % m_length + offset];        
     prevSample = m_frac * (b-prevSample) + a; 
     if (int_pos < 8) 
         return window[int_pos] * prevSample; 
