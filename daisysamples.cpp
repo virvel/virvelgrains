@@ -9,7 +9,7 @@ using namespace daisysp;
 
 struct looperparams {
     float speed = 1.f;
-    float size = 1000.f;
+    float size = 1.f;
     float offset = 0.f;
     float volume = 1.f;
 }; 
@@ -18,6 +18,7 @@ enum DISPLAYVALS {
     LOOPER,
     REVERB
 };
+
 DaisyPatch patch;
 const int32_t BUFFER_SIZE = 960000;
 const int NUM_LOOPERS = 3;
@@ -33,7 +34,8 @@ uint32_t n = 0;
 bool gate = false;
 float lastOffset = 0;
 int looper = 0;
-float ctrlRev, ctrlFreq;
+float lastCtrlSpeed, lastCtrlSize, lastCtrlOffset, lastCtrlVol;
+float lastCtrlRev, lastCtrlFreq;
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size) {
 
 	for (size_t i = 0; i < size; i++)
@@ -71,18 +73,37 @@ void UpdateControls() {
 
         case LOOPER: 
         {
-            loopers[looper].speed = patch.GetKnobValue((DaisyPatch::Ctrl)0)*2.f;
-            loopers[looper].size = patch.GetKnobValue((DaisyPatch::Ctrl)1)*2.f;
-            loopers[looper].volume = patch.GetKnobValue((DaisyPatch::Ctrl)3);
+            float ctrlSpeed = patch.GetKnobValue((DaisyPatch::Ctrl)0)*2.f;
+            float ctrlSize = patch.GetKnobValue((DaisyPatch::Ctrl)1)*2.f;
             float ctrlOffset = patch.GetKnobValue((DaisyPatch::Ctrl)2);
+            float ctrlVol = patch.GetKnobValue((DaisyPatch::Ctrl)3);
 
-            poopers[looper].setSpeed(loopers[looper].speed); 
-            poopers[looper].setDelayTime(loopers[looper].size); 
-            if (abs(lastOffset-ctrlOffset) > 0.001) {
-                lastOffset = ctrlOffset;
-                loopers[looper].offset = lastOffset;
-                poopers[looper].setOffset(loopers[looper].offset); 
+
+            if (abs(lastCtrlSpeed-ctrlSpeed) > 0.001) {
+                lastCtrlSpeed = ctrlSpeed;
+                loopers[looper].speed = ctrlSpeed;
+                poopers[looper].setSpeed(ctrlSpeed); 
             }
+
+            if (abs(lastCtrlSize-ctrlSize) > 0.001) {
+                lastCtrlSize = ctrlSize;
+                loopers[looper].size = ctrlSize;
+                poopers[looper].setDelayTime(ctrlSize); 
+            }
+
+            if (abs(lastCtrlOffset-ctrlOffset) > 0.001) {
+                lastCtrlOffset = ctrlOffset;
+                loopers[looper].offset = ctrlOffset;
+                poopers[looper].setOffset(ctrlOffset); 
+            }
+
+            if (abs(lastCtrlVol-ctrlVol) > 0.001) {
+                lastCtrlVol = ctrlVol;
+                loopers[looper].volume = ctrlVol;
+                //poopers[looper].setVolume(ctrlVol); 
+            }
+
+
 
             looper += patch.encoder.Increment();
             looper = ((looper % 3) + 3) % 3;
@@ -91,10 +112,18 @@ void UpdateControls() {
         
         case REVERB:
         { 
-            ctrlFreq = patch.GetKnobValue((DaisyPatch::Ctrl)1) * 10000;
-            ctrlRev = patch.GetKnobValue((DaisyPatch::Ctrl)0);
-            rev.SetLpFreq(ctrlFreq); 
-            rev.SetFeedback(ctrlRev); 
+            float ctrlFreq = patch.GetKnobValue((DaisyPatch::Ctrl)1) * 10000;
+            float ctrlRev = patch.GetKnobValue((DaisyPatch::Ctrl)0);
+            if (abs(lastCtrlFreq-ctrlFreq) > 0.001) {
+                lastCtrlFreq = ctrlFreq;
+                rev.SetLpFreq(ctrlFreq); 
+                
+            }
+            if (abs(lastCtrlRev-ctrlRev) > 0.001) {
+                lastCtrlRev = ctrlRev;
+                rev.SetFeedback(ctrlRev); 
+                
+            }
             
             break;
         }
@@ -156,11 +185,11 @@ void UpdateOled() {
             patch.display.WriteString(cstr, Font_6x8, true);
 
             patch.display.SetCursor(0, 40);
-            str = std::to_string(int(ctrlRev*100)) + "%";
+            str = std::to_string(int(lastCtrlRev*100)) + "%";
             patch.display.WriteString(cstr, Font_6x8, true);
 
             patch.display.SetCursor(30, 40);
-            str = std::to_string(int(ctrlFreq)) + "Hz";
+            str = std::to_string(int(lastCtrlFreq)) + "Hz";
             patch.display.WriteString(cstr, Font_6x8, true);
 
             break;
@@ -182,14 +211,14 @@ void DrawSplash() {
         for(i = 0; i < 808; i++)
         {
             b = tema[i];
-            uint32_t f = i/101;
+            uint32_t f = i/104;
               for(j = 0; j < 8; j++)
               {
                   if((b << j) & 0x80) {
-                    patch.display.DrawPixel(currentX_ + i%101, currentY_ + 8*f-j, true);
+                    patch.display.DrawPixel(currentX_ + i%104, currentY_ + 8*f-j, true);
                   }
                   else {
-                    patch.display.DrawPixel(currentX_ + i%101, currentY_ + 8*f-j, false);
+                    patch.display.DrawPixel(currentX_ + i%104, currentY_ + 8*f-j, false);
                   }
               }
         }
