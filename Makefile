@@ -1,6 +1,8 @@
 # Project Name
 TARGET = daisysamples
 
+USE_FATFS=1
+
 # Sources
 CPP_SOURCES = daisysamples.cpp pooper.cpp
 

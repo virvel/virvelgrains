@@ -2,7 +2,7 @@
 
 using namespace daisysp;
 
-void Pooper::init(float * buffer, int32_t numSamples) {
+void Pooper::init(float * buffer, uint32_t numSamples) {
     m_buffer = buffer;
     m_rPtr = buffer;
     m_numSamples = numSamples;
@@ -20,9 +20,10 @@ void Pooper::process() {
 }
 
 void Pooper::setDelayTime(float t) {
-    m_length = static_cast<uint32_t>(t*48000.f);
-    
+    float floatSamples = static_cast<float>(m_numSamples);
+    m_length = static_cast<uint32_t>(t* floatSamples);
 }
+
 
 void Pooper::setSpeed(float speed) {
     m_speed = speed;
@@ -42,7 +43,7 @@ const float Pooper::read() {
     return readf(pos, offset); 
 }
 
-inline const float Pooper::readf(float pos, int32_t offset) {
+inline const float Pooper::readf(float pos, uint32_t offset) {
     int32_t int_pos = static_cast<int32_t>(pos);
     m_frac = pos  - static_cast<float>(int_pos);
     float a = m_rPtr[((int_pos) % m_length) + offset];
