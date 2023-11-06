@@ -1,8 +1,6 @@
 #include "daisy_patch.h"
 #include "daisysp.h"
 #include "pooper.h"
-#include "splash.h"
-
 
 using namespace daisy;
 using namespace daisysp;
@@ -12,7 +10,7 @@ struct looperparams {
     float speed = 1.f;
     float size = 1.f;
     float offset = 0.f;
-    float volume = 1.f;
+    float volume = 0.25f;
 }; 
 
 enum DISPLAYVALS {
@@ -21,40 +19,24 @@ enum DISPLAYVALS {
 };
 
 DaisyPatch patch;
-const int32_t BUFFER_SIZE = 240000;
+constexpr uint32_t BUFFER_SIZE = 8*1024*1024;
 const int NUM_LOOPERS = 3;
-Pooper poopers[3];
+Pooper poopers[NUM_LOOPERS];
 looperparams loopers[NUM_LOOPERS];
-ReverbSc rev;
 DISPLAYVALS display = LOOPER;
 
+ReverbSc rev;
 
 uint32_t n = 0;
 bool gate = false;
 float lastOffset = 0;
 int looper = 0;
 
-float ctrls[4] = {1.f, 1.f, 1.f, 1.f};
+float ctrls[4] = {0.f, 0.f, 0.f, 0.f};
 
 DSY_SDRAM_BSS float buffer[BUFFER_SIZE];
-const uint32_t CUSTOM_POOL_SIZE = 10*1024*1024;
-DSY_SDRAM_BSS uint16_t custom_pool[CUSTOM_POOL_SIZE];
-size_t pool_index = 0;
-int allocation_count = 0;
-void* custom_pool_allocate(size_t size)
-{
-        if (pool_index + size >= CUSTOM_POOL_SIZE)
-        {
-                return 0;
-        }
-        void* ptr = &custom_pool[pool_index];
-        pool_index += size;
-        return ptr;
-}
-
 
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size) {
-
 	for (size_t i = 0; i < size; i++)
 	{
 		out[0][i] = 0.f;
@@ -62,17 +44,27 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 		out[2][i] = 0.f;
         out[3][i] = 0.f;
     }
+
     float revL, revR;
     for(size_t i = 0; i < size; ++i) {
         if (gate) {
         buffer[n] = in[0][i];
+        buffer[BUFFER_SIZE/2 + n] = in[1][i];
         }
-        n = (n + 1) % BUFFER_SIZE;
-        out[0][i] = loopers[0].volume * poopers[0].read();        
-        out[0][i] += loopers[1].volume * poopers[1].read();        
-        out[0][i] += loopers[2].volume * poopers[2].read();        
-        rev.Process(out[0][i], out[0][i], &revL, &revR);
-        out[1][i] = out[0][i];
+        int K = poopers[0].getNumSamples();
+        n = (n + 1) % K;
+        poopers[0].process();
+        out[0][i] = loopers[0].volume *  poopers[0].readL();
+        out[1][i] = loopers[0].volume * poopers[0].readR();
+       out[1][i] += loopers[0].volume * poopers[0].readL();
+        poopers[1].process();
+        out[0][i] += loopers[1].volume * poopers[1].readL();
+        out[1][i] += loopers[1].volume * poopers[1].readR();
+        poopers[2].process();
+        out[0][i] += loopers[2].volume * poopers[2].readL();
+        out[1][i] += loopers[2].volume * poopers[2].readR();
+
+        rev.Process(out[0][i], out[1][i], &revL, &revR);
         out[0][i] += revL;
         out[1][i] += revR;
     }
@@ -124,27 +116,36 @@ void loadWavFiles()
                 strcpy(m_file_info_[m_file_cnt_].name, fn);
                 // For now lets break anyway to test.
                 //                break;
-                size_t bytesread;
+                UINT bytesread;
                 if(f_open(&SDFile, m_file_info_[m_file_cnt_].name, (FA_OPEN_EXISTING | FA_READ))
                    == FR_OK)
                 {
                   m_file_sizes[m_file_cnt_] = f_size(&SDFile);
-                  uint16_t* memoryBuffer = 0;
+                  //float* memoryBuffer = 0;
                   UINT size = m_file_sizes[m_file_cnt_];
-                  size_t bytesread;
-                  memoryBuffer = (uint16_t*) custom_pool_allocate(size);
-                  if (memoryBuffer)
+                  //memoryBuffer = (uint16_t*) custom_pool_allocate(size);
+                  //memoryBuffer = (float *) buffer;
+                  if (&buffer[0])
                   {
                     // Read the whole WAV file
-                    f_lseek(&SDFile, 44);
-                    if(f_read(&SDFile,(void *)memoryBuffer,size-44,&bytesread) == FR_OK)
+                    f_lseek(&SDFile, 88);
+                    if(f_read(&SDFile,&buffer[0],(size-88)/4,&bytesread) == FR_OK)
                     {
-                      for (size_t i = 0; i < size/2; ++i) {
-                        buffer[i] = s162f(memoryBuffer[i]);
+                      for(int i = 0; i < NUM_LOOPERS; ++i) {
+                        poopers[i].setNumSamples((size-88)/8);
                       }
-                      for(int i = 0; i < 3; ++i) {
-                        poopers[i].setNumSamples(size/2);
-                      }
+                        uint32_t mid = BUFFER_SIZE/2;
+                        uint32_t i,j;
+                        for (i = 1; i < BUFFER_SIZE; ++i) {
+                            j = i<mid ? i*2 : ((i-mid)*2 + 1);
+                            while (j<i) {
+                                j = j<mid ? j*2 : ((j-mid)*2 + 1);
+                            }
+                            float tmp = buffer[i];
+                            buffer[i] = buffer[j];
+                            buffer[j] = tmp;
+                        }
+
                       m_file_cnt_++;
                     }
                     
@@ -176,7 +177,7 @@ void UpdateControls() {
 
         case LOOPER: 
         {
-            float ctrlSpeed = patch.GetKnobValue((DaisyPatch::Ctrl)0)*2.f;
+            float ctrlSpeed = patch.GetKnobValue((DaisyPatch::Ctrl)0)*3.f;
             float ctrlSize = patch.GetKnobValue((DaisyPatch::Ctrl)1);
             float ctrlOffset = patch.GetKnobValue((DaisyPatch::Ctrl)2);
             float ctrlVol = patch.GetKnobValue((DaisyPatch::Ctrl)3);
@@ -211,7 +212,6 @@ void UpdateControls() {
             looper = ((looper % 3) + 3) % 3;
             break;
         }
-        
         case REVERB:
         { 
             float ctrlFreq = patch.GetKnobValue((DaisyPatch::Ctrl)1) * 10000;
@@ -229,7 +229,7 @@ void UpdateControls() {
             
             break;
         }
-
+        
         default:
             break;
     }
@@ -243,6 +243,20 @@ void UpdateOled() {
    
         case LOOPER: 
         {
+            //patch.display.SetCursor(0, 20);
+            uint32_t f = poopers[0].getNumSamples()/128;
+            for (uint32_t i = 0; i < 128; i++) {
+                patch.display.DrawPixel(i, static_cast<int>(-buffer[i*f]*8) + 30, true);
+                patch.display.DrawPixel(i, static_cast<int>(-buffer[BUFFER_SIZE/2-1 + i*f]*8) + 50, true);
+            }
+
+            patch.display.DrawLine(128*loopers[looper].offset , 36,
+                                    128*loopers[looper].offset, 60,
+                                    true);
+            patch.display.DrawLine(128*(loopers[looper].offset+loopers[looper].size), 60,
+                                   128*(loopers[looper].offset+loopers[looper].size), 36,
+                                        true);
+
             patch.display.SetCursor(0, 0);
             std::string str  = "Pooper";
             char*       cstr = &str[0];
@@ -256,29 +270,23 @@ void UpdateOled() {
             str = std::to_string(int(loopers[looper].speed * 100)) + "%";
             patch.display.WriteString(cstr, Font_6x8, true);
 
+            f = poopers[0].getNumSamples();
+
             patch.display.SetCursor(30, 15);
-            str = std::to_string(int(loopers[looper].size * 1000)) + "ms";
+            str = std::to_string(int(loopers[looper].size * 1000.f * f / 48000.f)) + "ms";
             patch.display.WriteString(cstr, Font_6x8, true);
 
             patch.display.SetCursor(70, 15);
-            str = std::to_string(int(loopers[looper].offset * 1000)) + "ms";
+            str = std::to_string(int(loopers[looper].offset * 1000.f * f / 48000.f)) + "ms";
             patch.display.WriteString(cstr, Font_6x8, true);
 
             patch.display.SetCursor(70, 0);
             str = std::to_string(int(loopers[looper].volume * 100)) + "%";
             patch.display.WriteString(cstr, Font_6x8, true);
     
-            //patch.display.SetCursor(0, 20);
-            int f = poopers[0].getNumSamples() / 128;
-            for (int i = 0; i < 128; i++) {
-                patch.display.DrawPixel(i, buffer[f*i]*8 + 40, true);
-            }
 
-            patch.display.DrawLine(loopers[looper].offset*128, 30, loopers[looper].offset*128, 50,true);
-            patch.display.DrawLine(128*(loopers[looper].offset+loopers[looper].size), 50, 128*(loopers[looper].offset+loopers[looper].size), 30 ,true);
             break;
         }
-    
         case REVERB: 
         {
             patch.display.SetCursor(0, 0);
@@ -304,6 +312,9 @@ void UpdateOled() {
     
     patch.display.Update();
 }
+
+#if 0
+
 void DrawSplash() {
 
         uint32_t i, b, j;
@@ -327,19 +338,29 @@ void DrawSplash() {
     
     patch.display.Update(); 
 }
+#endif
 
 int main(void)
-{
-	patch.Init();
-    memset((float *)&buffer[0],0.f, BUFFER_SIZE);
-    patch.SetAudioBlockSize(48); // number of samples handled per callback
+{	
+
+    patch.Init();
+
+    patch.display.Fill(false);
+    patch.display.Update();
+    patch.SetAudioBlockSize(48); 
 	patch.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
 
     poopers[0].init(&buffer[0], BUFFER_SIZE);
+    std::fill(&buffer[0], &buffer[BUFFER_SIZE-1], 0.f);
     poopers[1].init(&buffer[0], BUFFER_SIZE);
     poopers[2].init(&buffer[0], BUFFER_SIZE);
 
-    DrawSplash();
+    //DrawSplash();
+
+
+    rev.Init(48000);
+    rev.SetLpFreq(10000);
+    rev.SetFeedback(0.6);
 
     SdmmcHandler::Config sd_cfg;
     sd_cfg.Defaults();
@@ -347,10 +368,6 @@ int main(void)
 
     // Link hardware and FatFS
     fsi.Init(FatFSInterface::Config::MEDIA_SD); 
-
-
-    rev.Init(48000);
-    rev.SetLpFreq(10000); 
 
     loadWavFiles();
 
