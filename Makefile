@@ -4,7 +4,8 @@ TARGET = daisysamples
 USE_FATFS=1
 
 # Sources
-CPP_SOURCES = daisysamples.cpp pooper.cpp
+#CPP_SOURCES = daisysamples.cpp pooper.cpp
+CPP_SOURCES = daisygrains.cpp granulator.cpp
 
 # Library Locations
 LIBDAISY_DIR = libDaisy
