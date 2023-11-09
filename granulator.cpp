@@ -1,4 +1,3 @@
-#include <random>
 #include "granulator.h"
 
 using namespace daisysp;
@@ -17,31 +16,27 @@ const float Grain::play() {
     float out;
     uint32_t int_pos = static_cast<uint32_t>(m_position);
 
-    /*if (int_pos >= m_duration)
-    {
-        m_active = false;
-        out = 0.f;
-    }
+    float a,b,frac;
 
-    if (m_active) 
-    {
-        */
-        float a,b,frac;
+    frac = m_position - int_pos;
 
-        frac = m_position - int_pos;
+    auto c = float(int_pos%m_duration)/float(m_duration);
+    c = sin(M_PI* c);
 
-        a = m_buf[((int_pos % m_duration) + (m_offset + m_jitter)) % m_size];
-        b = m_buf[(((int_pos + 1) %  m_duration) + (m_offset + m_jitter)) % m_size]; 
+    a = c*m_buf[((int_pos) + m_offset) % m_size];
+    b = c*m_buf[(((int_pos + 1) %  m_duration) + m_offset) % m_size];
 
-        auto c = float(int_pos%m_duration)/float(m_duration);
-        if (c > 0.5)
-            c = 1. -c;
-        c = sin(sin(M_PI_2 * c));
 
-        out= c*a+(b-a)*frac;
-   // }
-    m_position = fmod(m_position + m_rate, m_duration);
+    out= a+(b-a)*frac;
+    m_position = fmod(m_position + m_rate, float(m_duration));
     return out;
+}
+
+void Grain::setDuration(float s) {
+    {
+        m_duration = std::max(static_cast<uint32_t>(48), static_cast<uint32_t>(s * static_cast<float>(m_size)));
+        //m_duration = std::min(m_duration, m_size-m_offset);
+    }
 }
 
 
@@ -57,40 +52,38 @@ void Granulator::init(float * buffer, uint32_t numSamples) {
     for (auto &g : m_grains) {
         g.init(buffer, numSamples/2);
     }
-
-    for (int i = 0; i < m_num_grains; ++i) {
-        m_grains[i].setRate(float(i)/8.f);
-    }
+    m_grains[0].setRate(1.f);
+    m_grains[1].setRate(1.5f);
+    m_grains[2].setRate(2.f);
 }
 
-// [0,1] -> [0,numSamples-length]
+
 void Granulator::setOffset(float offset) {
-    m_offset = fmin(offset * float( m_numSamples - m_length), float( m_numSamples - m_length));
-}
-
-void Granulator::setPosition(float position) {
-    m_pos = position;
-    float jitter; 
+    float jitter;
     for (auto &g : m_grains) {
         jitter = static_cast<uint32_t>(1000.f*dist(gen));
         g.setJitter(jitter);
-        g.setPosition(position);
+        g.setOffset(offset);
     }
 }
 
+void Granulator::setNumSamples(uint32_t size) {
+    m_numSamples = size;
+    for(auto &g:m_grains)
+        g.setSize(size);
+}
+
 // Set duration in samples for each individual grain
-void Granulator::setDuration(uint32_t s) {
+void Granulator::setDuration(float s) {
     for (auto &g : m_grains) {
         g.setDuration(s);
     }
 }
 
 void Granulator::setSpeed(float speed) {
-    for (int i = 0; i < m_num_grains; ++i) {
-        m_grains[i].setRate(speed * float(i) / m_num_grains);
-    }
-//    for (auto &g : m_grains)
-//        g.setRate(speed);
+    m_grains[0].setRate(speed);
+    m_grains[1].setRate(speed*1.5);
+    m_grains[2].setRate(speed*2.f);
 }
 
 const float Granulator::play() {

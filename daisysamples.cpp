@@ -250,11 +250,11 @@ void UpdateOled() {
                 patch.display.DrawPixel(i, static_cast<int>(-buffer[BUFFER_SIZE/2-1 + i*f]*8) + 50, true);
             }
 
-            patch.display.DrawLine(128*loopers[looper].offset , 36,
+            patch.display.DrawLine(128*loopers[looper].offset , 16,
                                     128*loopers[looper].offset, 60,
                                     true);
             patch.display.DrawLine(128*(loopers[looper].offset+loopers[looper].size), 60,
-                                   128*(loopers[looper].offset+loopers[looper].size), 36,
+                                   128*(loopers[looper].offset+loopers[looper].size), 16,
                                         true);
 
             patch.display.SetCursor(0, 0);

@@ -14,9 +14,10 @@ namespace daisysp
         const float play();
         void setActive(bool active) { m_active = active; }
         void setRate(float rate) { m_rate = rate; }
-        void setPosition(float pos) { m_offset = pos; }
+        void setOffset(float pos) { m_offset = static_cast<uint32_t>(fmin(pos * float((m_size - m_offset)), float(m_size - m_offset))); }
         void setJitter(uint32_t jitter) { m_jitter = jitter; }
-        void setDuration(uint32_t s) {m_duration = s;}
+        void setDuration(float s);
+        void setSize(uint32_t size) { m_size = size;}
 
     private:
         bool m_active;
@@ -37,11 +38,10 @@ namespace daisysp
     public:
         void init(float *buffer, uint32_t size);
         void setSpeed(float speed);
-        void setPosition(float position);
-        void setDuration(uint32_t s);
+        void setDuration(float s);
         void setOffset(float o);
         const float play();
-        void setNumSamples(uint32_t s) { m_numSamples = s; }
+        void setNumSamples(uint32_t s);
         const uint32_t getNumSamples(void) { return m_numSamples; }
 
     private:
@@ -52,12 +52,11 @@ namespace daisysp
         float m_frac;
         float m_pos;
         float m_jitter;
-        uint32_t m_offset;
         float m_prevSampleL;
-        const uint16_t m_num_grains = 10; 
+        const uint16_t m_num_grains = 3; 
         std::default_random_engine gen;
         std::uniform_real_distribution<> dist;
-        Grain m_grains[10];
+        Grain m_grains[3];
     };
 
 }
