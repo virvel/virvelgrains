@@ -1,9 +1,6 @@
 #include "daisy_patch.h"
 #include "daisysp.h"
 #include "granulator.h"
-#include "src/util/CpuLoadMeter.h"
-
-#include <limits>
 
 using namespace daisy;
 using namespace daisysp;
@@ -31,11 +28,64 @@ float ctrls[4] = {0.f, 0.f, 0.f, 0.f};
 
 DSY_SDRAM_BSS float buffer[BUFFER_SIZE];
 
-CpuLoadMeter cpu;
+static SdmmcHandler sdcard;
+FatFSInterface fsi;
+FIL SDFile;
+
+const int maxFiles = 1;
+daisy::WavFileInfo m_file_info_[maxFiles];
+int m_file_sizes[maxFiles];
+
+struct waveFile {
+    uint16_t format;
+    uint16_t channels;
+    uint32_t samplerate;
+    uint16_t bitrate;
+    uint32_t num_samples;
+    uint16_t header_size;
+};
+
+waveFile parseHeader(FIL * file) {
+    waveFile wf;
+
+    uint32_t res;
+    UINT bytesread;
+    bool dataFound = false;    
+
+    while (!dataFound) {
+
+        f_read(file, &res, sizeof(uint32_t), &bytesread);
+
+        switch (res) {
+            case 0x20746D66: {
+                    f_read(file, &res, 4, &bytesread);
+                    f_read(file, &wf.format, sizeof(uint16_t), &bytesread);
+                    f_read(file, &wf.channels, sizeof(uint16_t), &bytesread);
+                    f_read(file, &wf.samplerate, sizeof(uint32_t), &bytesread);
+                    f_read(file, &res, sizeof(uint32_t), &bytesread);
+                    f_read(file, &res, sizeof(uint16_t), &bytesread);
+                    f_read(file, &wf.bitrate, sizeof(uint16_t), &bytesread);
+                    break;
+                }
+            case 0x61746164: {
+                    f_read(file, &wf.num_samples, sizeof(uint32_t), &bytesread);
+                    wf.num_samples = wf.num_samples / wf.channels/ 4;
+                    dataFound = true;
+                    break;
+                }
+            default:
+                break;
+        }
+
+    }
+ 
+    wf.header_size = f_tell(file);
+    return wf;
+
+}
 
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
-    cpu.OnBlockStart();
     for (size_t i = 0; i < size; i++)
     {
         out[0][i] = 0.f;
@@ -60,15 +110,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
         out[0][i] += revL;
         out[1][i] += revR;
     }
-    cpu.OnBlockEnd();
 }
-static SdmmcHandler sdcard;
-FatFSInterface fsi;
-FIL SDFile;
-
-const int maxFiles = 1;
-daisy::WavFileInfo m_file_info_[maxFiles];
-int m_file_sizes[maxFiles];
 
 void loadWavFiles()
 {
@@ -79,12 +121,9 @@ void loadWavFiles()
     DIR dir;
     char *fn;
 
-    // Get a reference to the SD card file system
     FATFS &fs = fsi.GetSDFileSystem();
-    // Mount SD Card
     f_mount(&fs, "/", 1);
 
-    // Open Dir and scan for files.
     if (f_opendir(&dir, "/") == FR_OK)
     {
         m_sd_debug_msg = "sd: no files";
@@ -99,6 +138,7 @@ void loadWavFiles()
                 continue;
             // Now we'll check if its .wav and add to the list.
             fn = fno.fname;
+
             if (m_file_cnt_ < maxFiles)
             {
                 if (strstr(fn, ".wav") || strstr(fn, ".WAV"))
@@ -110,50 +150,25 @@ void loadWavFiles()
                     {
                         m_file_sizes[m_file_cnt_] = f_size(&SDFile);
 
-                        uint32_t size = m_file_sizes[m_file_cnt_];
-                        size = (size - 88);
-                        ACTUAL_DURATION = size / 8;
+                        waveFile wf = parseHeader(&SDFile);
+
+                        if (wf.bitrate != 32)
+                            continue;
+                        if (wf.samplerate != 48000)
+                            continue;
+                        if (wf.channels != 2)
+                            continue;
+                        if (wf.format != 3)
+                            continue;
+                        
+                        uint32_t size = m_file_sizes[m_file_cnt_] - wf.header_size;
+                        ACTUAL_DURATION = size / ( wf.channels * sizeof(float));
 
                         if (&buffer[0])
                         {
                             // Jump ahead of header
-                            f_lseek(&SDFile, 88);
-                            UINT chunk = 16392 * 4;
-                            FRESULT res = FR_OK;
+                            //f_lseek(&SDFile, 88);
 
-                            if (size < chunk)
-                                chunk = size;
-
-                            uint32_t offset = 0;
-                            uint32_t br = 0;
-                            /*
-                            while (size > offset) {
-                                if (chunk > (size - offset))
-                                    chunk = size - offset;
-
-                                res = f_read(&SDFile,&buffer[offset],chunk,&bytesread);
-                                br += bytesread;
-                                offset += chunk;
-                                if (res != FR_OK) {
-                                    f_close(&SDFile);
-                                    break;
-                                }
-
-                            }
-                                 gran.setNumSamples(br/8);
-                                uint32_t mid = BUFFER_SIZE/2;
-                                uint32_t i,j;
-                                for (i = 1; i < BUFFER_SIZE; ++i) {
-                                    j = i<mid ? i*2 : ((i-mid)*2 + 1);
-                                    while (j<i) {
-                                        j = j<mid ? j*2 : ((j-mid)*2 + 1);
-                                    }
-                                    float tmp = buffer[i];
-                                    buffer[i] = buffer[j];
-                                    buffer[j] = tmp;
-                                }
-                                m_file_cnt_++;
-                                */
                             if (f_read(&SDFile, &buffer[0], size, &bytesread) == FR_OK)
                             {
                                 gran.setNumSamples(size / 8);
@@ -309,9 +324,6 @@ void UpdateOled()
         str = std::to_string(ACTUAL_DURATION);
         patch.display.WriteString(cstr, Font_6x8, true);
 
-        patch.display.SetCursor(90, 0);
-        str = std::to_string(int(cpu.GetAvgCpuLoad() * 100));
-        patch.display.WriteString(cstr, Font_6x8, true);
         break;
     }
     case REVERB:
@@ -341,15 +353,12 @@ void UpdateOled()
 
 int main(void)
 {
-
     patch.Init();
 
     patch.display.Fill(false);
     patch.display.Update();
     patch.SetAudioBlockSize(48);
     patch.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
-
-    cpu.Init(48000, 48);
 
     gran.init(&buffer[0], BUFFER_SIZE);
     std::fill(&buffer[0], &buffer[BUFFER_SIZE - 1], 0.f);
@@ -359,7 +368,6 @@ int main(void)
     rev.SetFeedback(0.6);
 
     SdmmcHandler::Config sd_cfg;
-    //    sd_cfg.Defaults();
     sd_cfg.speed = SdmmcHandler::Speed::SLOW;
     sd_cfg.width = SdmmcHandler::BusWidth::BITS_1;
     sdcard.Init(sd_cfg);

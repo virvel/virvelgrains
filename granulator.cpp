@@ -13,7 +13,6 @@ void Grain::init(float * buffer, uint32_t size) {
 }
 
 const float Grain::play() {
-    float out;
     uint32_t int_pos = static_cast<uint32_t>(m_position);
 
     float a,b,frac;
@@ -26,10 +25,9 @@ const float Grain::play() {
     a = c*m_buf[((int_pos) + m_offset) % m_size];
     b = c*m_buf[(((int_pos + 1) %  m_duration) + m_offset) % m_size];
 
-
-    out= a+(b-a)*frac;
+    m_prevSample = c* frac * (a-m_prevSample) + b;
     m_position = fmod(m_position + m_rate, float(m_duration));
-    return out;
+    return m_prevSample;
 }
 
 void Grain::setDuration(float s) {
@@ -39,14 +37,9 @@ void Grain::setDuration(float s) {
     }
 }
 
-
-
 void Granulator::init(float * buffer, uint32_t numSamples) {
     m_numSamples = numSamples/2;
     m_buffer = buffer;
-    m_length = numSamples/2;
-    m_speed = 1.0f;
-    m_prevSampleL = 0.f;
     dist = std::uniform_real_distribution<>(0.f, 1.f);
 
     for (auto &g : m_grains) {
@@ -56,7 +49,6 @@ void Granulator::init(float * buffer, uint32_t numSamples) {
     m_grains[1].setRate(1.5f);
     m_grains[2].setRate(2.f);
 }
-
 
 void Granulator::setOffset(float offset) {
     float jitter;

@@ -7,7 +7,6 @@
 
 int main(int argc, char * argv[]) {
 
-    WavHeader h;
     
     if (!argv[1])
     {
@@ -40,6 +39,7 @@ int main(int argc, char * argv[]) {
         uint32_t samplerate;
         uint32_t bitrate;
         uint32_t num_samples;
+        uint32_t file_size;
     };
    
     waveFile wf;
@@ -53,11 +53,6 @@ int main(int argc, char * argv[]) {
         file.read((char *)&res, sizeof(uint32_t)); 
 
         switch (res) {
-            case RIFF: {
-                    file.read((char *)&res, sizeof(uint32_t));
-                    printf("size: %d\n", res);
-                    break;
-                }
             case fmt: {
                     file.seekg(4, std::ios::cur);
                     file.read((char *)&wf.format, sizeof(uint16_t));
@@ -69,7 +64,7 @@ int main(int argc, char * argv[]) {
                 }
             case data: {
                     file.read((char *)&wf.num_samples, sizeof(uint32_t));
-                    wf.num_samples = wf.num_samples / wf.channels/ 4;
+                    wf.num_samples = wf.num_samples / wf.channels/ 4;                    
                     dataFound = true;
                     break;
                 }
@@ -88,6 +83,8 @@ int main(int argc, char * argv[]) {
     printf("samplerate: %d\n", wf.samplerate);
     printf("bitrate: %d\n", wf.bitrate);
     printf("num samples: %d\n", wf.num_samples);
+
+    printf("header size: %d\n", bytesread );
 
     return 0;
 }

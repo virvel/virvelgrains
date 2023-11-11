@@ -23,11 +23,10 @@ namespace daisysp
         bool m_active;
         float *m_buf;
         float m_position;
+        float m_prevSample;
         uint32_t m_offset;
         uint32_t m_duration;
         uint32_t m_size;
-        uint32_t m_spread;
-        uint32_t m_pan;
         uint32_t m_jitter;
         float m_rate;
     };
@@ -47,12 +46,6 @@ namespace daisysp
     private:
         float *m_buffer;
         uint32_t m_numSamples;
-        uint32_t m_length;
-        float m_speed;
-        float m_frac;
-        float m_pos;
-        float m_jitter;
-        float m_prevSampleL;
         const uint16_t m_num_grains = 3; 
         std::default_random_engine gen;
         std::uniform_real_distribution<> dist;
