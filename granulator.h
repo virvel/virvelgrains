@@ -40,7 +40,7 @@ namespace daisysp
         void setOffset(float o);
         const float play();
         void setNumSamples(uint32_t s);
-        const uint32_t getNumSamples(void) { return m_numSamples; }
+        const inline uint32_t getNumSamples(void) { return m_numSamples; }
 
     private:
         float *m_buffer;
