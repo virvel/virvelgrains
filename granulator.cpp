@@ -10,30 +10,44 @@ void Grain::init(float * buffer, uint32_t size) {
     m_rate = 1.f;
     m_duration = m_size;
     m_offset = 0;
+    m_next_offset = 0;
 }
 
 const float Grain::play() {
-    uint32_t int_pos = static_cast<uint32_t>(m_position);
+    
+    float out = 0.f;
 
-    float a,b,frac;
+    if (m_position >= m_duration)
+        m_active = false;
 
-    frac = m_position - int_pos;
+    if (m_active ) {
+        uint32_t int_pos = static_cast<uint32_t>(m_position);
 
-    auto c = float(int_pos%m_duration)/float(m_duration);
-    c = sin(M_PI* c);
+        float a,b,frac;
 
-    a = c*m_buf[((int_pos) + m_offset) % m_size];
-    b = c*m_buf[(((int_pos + 1) %  m_duration) + m_offset) % m_size];
+        frac = m_position - int_pos;
 
-    m_prevSample = c* frac * (a-m_prevSample) + b;
-    m_position = fmod(m_position + m_rate, float(m_duration));
-    return m_prevSample;
+        auto c = float(int_pos%m_duration)/float(m_duration);
+        c = sin(M_PI* c);
+
+        a = c*m_buf[((int_pos) + m_offset) % m_size];
+        b = c*m_buf[(((int_pos + 1) %  m_duration) + m_offset) % m_size];
+
+        m_prevSample = c* frac * (a-m_prevSample) + b;
+        out = m_prevSample;
+        m_position = m_position + m_rate;
+    }
+    else {
+        m_position = 0.f;
+        m_offset = m_next_offset;
+        m_active = true;
+    }
+    return out;
 }
 
-void Grain::setDuration(float s) {
+const inline void Grain::setDuration(float s) {
     {
         m_duration = std::max(static_cast<uint32_t>(48), static_cast<uint32_t>(s * static_cast<float>(m_size)));
-        //m_duration = std::min(m_duration, m_size-m_offset);
     }
 }
 

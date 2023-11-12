@@ -8,27 +8,26 @@ namespace daisysp
     {
 
     public:
-        Grain(){}
-        ~Grain(){}
         void init(float *buffer, uint32_t size);
         const float play();
-        void setActive(bool active) { m_active = active; }
-        void setRate(float rate) { m_rate = rate; }
-        void setOffset(float pos) { m_offset = static_cast<uint32_t>(fmin(pos * float((m_size - m_offset)), float(m_size - m_offset))); }
-        void setJitter(uint32_t jitter) { m_jitter = jitter; }
-        void setDuration(float s);
-        void setSize(uint32_t size) { m_size = size;}
+        const inline void setActive(bool active) { m_active = active; }
+        const inline void setRate(float rate) { m_rate = rate; }
+        const inline void setOffset(float pos) { m_next_offset = static_cast<uint32_t>(fmin(pos * float((m_size - m_duration)), float(m_size - m_duration))); }
+        const inline void setJitter(uint32_t jitter) { m_jitter = jitter; }
+        const inline void setDuration(float s);
+        const inline void setSize(uint32_t size) { m_size = size;}
 
     private:
         bool m_active;
         float *m_buf;
         float m_position;
         float m_prevSample;
+        float m_rate;
         uint32_t m_offset;
+        uint32_t m_next_offset;
         uint32_t m_duration;
         uint32_t m_size;
         uint32_t m_jitter;
-        float m_rate;
     };
 
     class Granulator

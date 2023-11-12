@@ -20,8 +20,6 @@ DISPLAYVALS display = LOOPER;
 
 uint32_t n = 0;
 bool gate = false;
-float lastOffset = 0;
-int looper = 0;
 uint32_t ACTUAL_DURATION = 0;
 
 float ctrls[4] = {0.f, 0.f, 0.f, 0.f};
@@ -368,8 +366,8 @@ int main(void)
     rev.SetFeedback(0.6);
 
     SdmmcHandler::Config sd_cfg;
-    sd_cfg.speed = SdmmcHandler::Speed::SLOW;
-    sd_cfg.width = SdmmcHandler::BusWidth::BITS_1;
+    sd_cfg.speed = SdmmcHandler::Speed::MEDIUM_SLOW;
+    sd_cfg.width = SdmmcHandler::BusWidth::BITS_4;
     sdcard.Init(sd_cfg);
 
     // Link hardware and FatFS
