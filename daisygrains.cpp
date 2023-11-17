@@ -164,9 +164,6 @@ void loadWavFiles()
 
                         if (&buffer[0])
                         {
-                            // Jump ahead of header
-                            //f_lseek(&SDFile, 88);
-
                             if (f_read(&SDFile, &buffer[0], size, &bytesread) == FR_OK)
                             {
                                 gran.setNumSamples(size / 8);
