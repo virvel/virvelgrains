@@ -7,16 +7,17 @@ using namespace daisysp;
 
 DaisyPatch patch;
 constexpr uint32_t BUFFER_SIZE = 8 * 1024 * 1024;
-Granulator gran;
+dsp::Granulator gran;
 ReverbSc rev;
 
 enum DISPLAYVALS
 {
-    LOOPER,
+    GRAIN1,
+    GRAIN2,
     REVERB
 };
 
-DISPLAYVALS display = LOOPER;
+DISPLAYVALS display = GRAIN1;
 
 uint32_t n = 0;
 bool gate = false;
@@ -205,12 +206,12 @@ void UpdateControls()
     gate = patch.gate_input[0].State();
 
     if (patch.encoder.RisingEdge())
-        display = DISPLAYVALS((int(display) + 1) % 2);
+        display = DISPLAYVALS((int(display) + 1) % 3);
 
     switch (display)
     {
 
-    case LOOPER:
+    case GRAIN1:
     {
 
         float ctrlSpeed = patch.GetKnobValue((DaisyPatch::Ctrl)0) * 3.f;
@@ -221,7 +222,7 @@ void UpdateControls()
         if (abs(ctrls[0] - ctrlSpeed) > 0.001)
         {
             ctrls[0] = ctrlSpeed;
-            gran.setSpeed(ctrlSpeed);
+            gran.setRate(ctrlSpeed);
         }
 
         if (abs(ctrls[1] - ctrlOffset) > 0.001)
@@ -240,6 +241,38 @@ void UpdateControls()
         {
             ctrls[3] = ctrlVol;
         }
+        break;
+    }
+    case GRAIN2:
+    {
+
+        float ctrl0 = patch.GetKnobValue((DaisyPatch::Ctrl)0) * 3.f;
+        //float ctrl1 = patch.GetKnobValue((DaisyPatch::Ctrl)1);
+        //float ctrl2 = patch.GetKnobValue((DaisyPatch::Ctrl)2);
+        //float ctrl3 = patch.GetKnobValue((DaisyPatch::Ctrl)3);
+
+        if (abs(ctrls[0] - ctrl0) > 0.001)
+        {
+            ctrls[0] = ctrl0;
+            gran.setJitter(ctrl0* static_cast<float>(ACTUAL_DURATION));
+        }
+
+        /*if (abs(ctrls[1] - ctrl1) > 0.001)
+        {
+            ctrls[1] = ctrl1;
+            gran.setOffset(ctrl1);
+        }
+
+        if (abs(ctrls[2] - ctrl2) > 0.001)
+        {
+            ctrls[2] = ctrl2;
+            gran.setDuration(ctrl2);
+        }
+
+        if (abs(ctrls[3] - ctrl3) > 0.001)
+        {
+            ctrls[3] = ctrl3;
+        }*/
         break;
     }
     case REVERB:
@@ -273,14 +306,29 @@ void UpdateOled()
     switch (display)
     {
 
-    case LOOPER:
+    case GRAIN1:
     {
 
+        /*
         uint32_t f = ACTUAL_DURATION / 128;
         for (uint32_t i = 0; i < 128; i++)
         {
             patch.display.DrawPixel(i, static_cast<int>(-buffer[i * f] * 8) + 30, true);
             patch.display.DrawPixel(i, static_cast<int>(-buffer[BUFFER_SIZE / 2 - 1 + i * f] * 8) + 50, true);
+        }
+        */
+
+        float g = ctrls[1] * ACTUAL_DURATION;
+        float f = ((ACTUAL_DURATION-g)/128 - 1) * ctrls[2] + 1;
+
+        g = daisysp::fmin(ACTUAL_DURATION-128, g);
+        f = daisysp::fmax(1.f, f);
+        int prev = 32, curr;
+        for (uint32_t i = 0; i < 128; i++)
+        {
+            curr = -buffer[int(i*f) + int(g)]*20 + 44;
+            patch.display.DrawLine(i, prev, i, curr, true);
+            prev = curr;
         }
 
         patch.display.DrawLine(128 * ctrls[2], 36,
@@ -311,6 +359,52 @@ void UpdateOled()
         str = std::to_string(int(ctrls[3] * 100.f));
         patch.display.WriteString(cstr, Font_6x8, true);
 
+        break;
+    }
+    case GRAIN2:
+    {
+
+        float g = ctrls[1] * ACTUAL_DURATION;
+        float f = ((ACTUAL_DURATION-g)/128 - 1) * ctrls[2] + 1;
+
+        g = daisysp::fmin(ACTUAL_DURATION-128, g);
+        f = daisysp::fmax(1.f, f);
+        int prev = 32, curr;
+        for (uint32_t i = 0; i < 128; i++)
+        {
+            curr = -buffer[int(i*f) + int(g)]*20 + 44;
+            patch.display.DrawLine(i, prev, i, curr, true);
+            prev = curr;
+        }
+
+        patch.display.DrawLine(128 * ctrls[2], 36,
+                               128 * ctrls[2], 60,
+                               true);
+        patch.display.DrawLine(64 * (ctrls[1] + ctrls[2]), 60,
+                               64 * (ctrls[1] + ctrls[2]), 36,
+                               true);
+
+        patch.display.SetCursor(0, 0);
+        std::string str = "GRAIN2";
+        char *cstr = &str[0];
+        patch.display.WriteString(cstr, Font_6x8, true);
+
+        patch.display.SetCursor(0, 15);
+        str = std::to_string(int(ctrls[0] * 100.f));
+        patch.display.WriteString(cstr, Font_6x8, true);
+
+        /*patch.display.SetCursor(30, 15);
+        str = std::to_string(int(ctrls[1] * 100.f));
+        patch.display.WriteString(cstr, Font_6x8, true);
+
+        patch.display.SetCursor(70, 15);
+        str = std::to_string(int(ctrls[2] * 100.f));
+        patch.display.WriteString(cstr, Font_6x8, true);
+
+        patch.display.SetCursor(70, 0);
+        str = std::to_string(int(ctrls[3] * 100.f));
+        patch.display.WriteString(cstr, Font_6x8, true);
+
         patch.display.SetCursor(0, 50);
         str = std::to_string(uint32_t(ctrls[2] * ACTUAL_DURATION));
         patch.display.WriteString(cstr, Font_6x8, true);
@@ -318,6 +412,7 @@ void UpdateOled()
         patch.display.SetCursor(0, 40);
         str = std::to_string(ACTUAL_DURATION);
         patch.display.WriteString(cstr, Font_6x8, true);
+        */
 
         break;
     }
