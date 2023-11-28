@@ -7,8 +7,8 @@
 daisy::DaisyPatch patch;
 constexpr uint32_t BUFFER_SIZE = 8 * 1024 * 1024;
 dsp::Granulator gran;
-daisysp::FrequencyShifter fShift;
 
+daisysp::ReverbSc rev;
 
 enum DISPLAYVALS
 {
@@ -93,6 +93,7 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
         out[3][i] = 0.f;
     }
 
+    float revL, revR;
     for (size_t i = 0; i < size; ++i)
     {
         if (gate)
@@ -103,9 +104,11 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
         n = (n + 1) % ACTUAL_DURATION;
         out[0][i] = ctrls[3] * gran.play();
         out[1][i] = out[0][i];
+        rev.Process(out[0][i], out[1][i], &revL, &revR );
+        out[0][i] += revL;
+        out[1][i] += revR;
     }
     
-    fShift.process(&out[0][0], &out[1][0], size);
 }
 
 void loadWavFiles()
@@ -236,7 +239,7 @@ void UpdateControls()
     switch (display) {
         case GRAIN1:
         {
-            gran.setRate(ctrls[0] * 3.f);
+            gran.setRate(ctrls[0]);
             gran.setOffset(ctrls[1]);
             gran.setDuration(ctrls[2]);
             
@@ -250,7 +253,9 @@ void UpdateControls()
         case FX:
         {
             auto mtof = [](const float n) { return 1. * powf(2.f,48.f*n/12.f);};
-            fShift.frequency(mtof(ctrls[2]));
+            //fShift.frequency(mtof(ctrls[2]));
+            rev.SetFeedback(ctrls[0]);
+            rev.SetLpFreq(ctrls[1]*10000.f);
             break;
         }
 
@@ -328,8 +333,12 @@ void UpdateOled()
         char *cstr = &str[0];
         patch.display.WriteString(cstr, Font_6x8, true);
 
+        patch.display.SetCursor(0, 20);
+        str = std::to_string(int(ctrls[0] * 100.f));
+        patch.display.WriteString(cstr, Font_6x8, true);
+
         patch.display.SetCursor(0, 40);
-        str = std::to_string(int(ctrls[2] * 100.f));
+        str = std::to_string(int(ctrls[1] * 100.f));
         patch.display.WriteString(cstr, Font_6x8, true);
 
         break;
@@ -342,8 +351,7 @@ void UpdateOled()
     patch.display.Update();
 }
 
-int main(void)
-{    patch.Init();
+int main(void){    patch.Init();
 
     patch.display.Fill(false);
     patch.display.Update();
@@ -353,13 +361,15 @@ int main(void)
     patch.controls[2].SetCoeff(0.5);
     patch.controls[3].SetCoeff(0.5);
 
-    patch.SetAudioBlockSize(16);
+    patch.SetAudioBlockSize(48);
     patch.SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate::SAI_48KHZ);
 
     gran.init(&buffer[0], BUFFER_SIZE);
     std::fill(&buffer[0], &buffer[BUFFER_SIZE - 1], 0.f);
 
-    fShift.init(48000);
+    rev.Init(48000);
+    rev.SetFeedback(0.5);
+    rev.SetLpFreq(5000);
 
     daisy::SdmmcHandler::Config sd_cfg;
     sd_cfg.speed = daisy::SdmmcHandler::Speed::MEDIUM_SLOW;
