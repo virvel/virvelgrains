@@ -1,20 +1,20 @@
 #include "daisy_patch.h"
 #include "daisysp.h"
 #include "granulator.h"
+#include "frequencyshifter.h"
+#include <cmath>
 
-using namespace daisy;
-using namespace daisysp;
-
-DaisyPatch patch;
+daisy::DaisyPatch patch;
 constexpr uint32_t BUFFER_SIZE = 8 * 1024 * 1024;
 dsp::Granulator gran;
-ReverbSc rev;
+daisysp::FrequencyShifter fShift;
+
 
 enum DISPLAYVALS
 {
     GRAIN1,
     GRAIN2,
-    REVERB
+    FX
 };
 
 DISPLAYVALS display = GRAIN1;
@@ -27,8 +27,8 @@ float ctrls[4] = {0.f, 0.f, 0.f, 0.f};
 
 DSY_SDRAM_BSS float buffer[BUFFER_SIZE];
 
-static SdmmcHandler sdcard;
-FatFSInterface fsi;
+static daisy::SdmmcHandler sdcard;
+daisy::FatFSInterface fsi;
 FIL SDFile;
 
 const int maxFiles = 1;
@@ -83,7 +83,7 @@ waveFile parseHeader(FIL * file) {
 
 }
 
-void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
+void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::OutputBuffer out, size_t size)
 {
     for (size_t i = 0; i < size; i++)
     {
@@ -93,7 +93,6 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
         out[3][i] = 0.f;
     }
 
-    float revL, revR;
     for (size_t i = 0; i < size; ++i)
     {
         if (gate)
@@ -104,11 +103,9 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
         n = (n + 1) % ACTUAL_DURATION;
         out[0][i] = ctrls[3] * gran.play();
         out[1][i] = out[0][i];
-
-        rev.Process(out[0][i], out[1][i], &revL, &revR);
-        out[0][i] += revL;
-        out[1][i] += revR;
     }
+    
+    fShift.process(&out[0][0], &out[1][0], size);
 }
 
 void loadWavFiles()
@@ -208,94 +205,58 @@ void UpdateControls()
     if (patch.encoder.RisingEdge())
         display = DISPLAYVALS((int(display) + 1) % 3);
 
-    switch (display)
-    {
+    float ctrl0 = patch.GetKnobValue((daisy::DaisyPatch::Ctrl)0);
+    float ctrl1 = patch.GetKnobValue((daisy::DaisyPatch::Ctrl)1);
+    float ctrl2 = patch.GetKnobValue((daisy::DaisyPatch::Ctrl)2);
+    float ctrl3 = patch.GetKnobValue((daisy::DaisyPatch::Ctrl)3);
 
-    case GRAIN1:
-    {
-
-        float ctrlSpeed = patch.GetKnobValue((DaisyPatch::Ctrl)0) * 3.f;
-        float ctrlOffset = patch.GetKnobValue((DaisyPatch::Ctrl)1);
-        float ctrlSize = patch.GetKnobValue((DaisyPatch::Ctrl)2);
-        float ctrlVol = patch.GetKnobValue((DaisyPatch::Ctrl)3);
-
-        if (abs(ctrls[0] - ctrlSpeed) > 0.001)
-        {
-            ctrls[0] = ctrlSpeed;
-            gran.setRate(ctrlSpeed);
-        }
-
-        if (abs(ctrls[1] - ctrlOffset) > 0.001)
-        {
-            ctrls[1] = ctrlOffset;
-            gran.setOffset(ctrlOffset);
-        }
-
-        if (abs(ctrls[2] - ctrlSize) > 0.001)
-        {
-            ctrls[2] = ctrlSize;
-            gran.setDuration(ctrlSize);
-        }
-
-        if (abs(ctrls[3] - ctrlVol) > 0.001)
-        {
-            ctrls[3] = ctrlVol;
-        }
-        break;
+    if (abs(ctrls[0] - ctrl0) > 0.001) {
+        if (ctrl0 < 0.001)
+            ctrl0 = 0.f;
+        ctrls[0] = ctrl0;
     }
-    case GRAIN2:
-    {
-
-        float ctrl0 = patch.GetKnobValue((DaisyPatch::Ctrl)0) * 3.f;
-        //float ctrl1 = patch.GetKnobValue((DaisyPatch::Ctrl)1);
-        //float ctrl2 = patch.GetKnobValue((DaisyPatch::Ctrl)2);
-        //float ctrl3 = patch.GetKnobValue((DaisyPatch::Ctrl)3);
-
-        if (abs(ctrls[0] - ctrl0) > 0.001)
-        {
-            ctrls[0] = ctrl0;
-            gran.setJitter(ctrl0* static_cast<float>(ACTUAL_DURATION));
-        }
-
-        /*if (abs(ctrls[1] - ctrl1) > 0.001)
-        {
-            ctrls[1] = ctrl1;
-            gran.setOffset(ctrl1);
-        }
-
-        if (abs(ctrls[2] - ctrl2) > 0.001)
-        {
-            ctrls[2] = ctrl2;
-            gran.setDuration(ctrl2);
-        }
-
-        if (abs(ctrls[3] - ctrl3) > 0.001)
-        {
-            ctrls[3] = ctrl3;
-        }*/
-        break;
+    if (abs(ctrls[1] - ctrl1) > 0.001) {
+        if (ctrl1 < 0.001)
+            ctrl1 = 0.f;
+        ctrls[1] = ctrl1;
     }
-    case REVERB:
-    {
-        float ctrlFreq = patch.GetKnobValue((DaisyPatch::Ctrl)1) * 10000;
-        float ctrlRev = patch.GetKnobValue((DaisyPatch::Ctrl)0);
-        if (abs(ctrls[1] - ctrlFreq) > 0.001)
-        {
-            ctrls[1] = ctrlFreq;
-            rev.SetLpFreq(ctrlFreq);
-        }
-        if (abs(ctrls[0] - ctrlRev) > 0.001)
-        {
-            ctrls[0] = ctrlRev;
-            rev.SetFeedback(ctrlRev);
-        }
-
-        break;
+    
+    if (abs(ctrls[2] - ctrl2) > 0.001) {
+        if (ctrl2 < 0.001)
+            ctrl2 = 0.f;
+        ctrls[2] = ctrl2;
     }
 
-    default:
-        break;
+    if (abs(ctrls[3] - ctrl3) > 0.001) {
+        if (ctrl3 < 0.01)
+            ctrl3 = 0.f;
+        ctrls[3] = ctrl3;
     }
+    
+    switch (display) {
+        case GRAIN1:
+        {
+            gran.setRate(ctrls[0] * 3.f);
+            gran.setOffset(ctrls[1]);
+            gran.setDuration(ctrls[2]);
+            
+            break;
+        }
+        case GRAIN2:
+        {
+            gran.setJitter(ctrls[0]* static_cast<float>(ACTUAL_DURATION));
+            break;
+        }
+        case FX:
+        {
+            auto mtof = [](const float n) { return 1. * powf(2.f,48.f*n/12.f);};
+            fShift.frequency(mtof(ctrls[2]));
+            break;
+        }
+
+        default:
+            break;
+        }
 }
 
 void UpdateOled()
@@ -303,20 +264,6 @@ void UpdateOled()
 
     patch.display.Fill(false);
 
-    switch (display)
-    {
-
-    case GRAIN1:
-    {
-
-        /*
-        uint32_t f = ACTUAL_DURATION / 128;
-        for (uint32_t i = 0; i < 128; i++)
-        {
-            patch.display.DrawPixel(i, static_cast<int>(-buffer[i * f] * 8) + 30, true);
-            patch.display.DrawPixel(i, static_cast<int>(-buffer[BUFFER_SIZE / 2 - 1 + i * f] * 8) + 50, true);
-        }
-        */
 
         float g = ctrls[1] * ACTUAL_DURATION;
         float f = ((ACTUAL_DURATION-g)/128 - 1) * ctrls[2] + 1;
@@ -331,12 +278,11 @@ void UpdateOled()
             prev = curr;
         }
 
-        patch.display.DrawLine(128 * ctrls[2], 36,
-                               128 * ctrls[2], 60,
-                               true);
-        patch.display.DrawLine(64 * (ctrls[1] + ctrls[2]), 60,
-                               64 * (ctrls[1] + ctrls[2]), 36,
-                               true);
+    switch (display)
+    {
+
+    case GRAIN1:
+    {
 
         patch.display.SetCursor(0, 0);
         std::string str = "Yoyo";
@@ -363,27 +309,6 @@ void UpdateOled()
     }
     case GRAIN2:
     {
-
-        float g = ctrls[1] * ACTUAL_DURATION;
-        float f = ((ACTUAL_DURATION-g)/128 - 1) * ctrls[2] + 1;
-
-        g = daisysp::fmin(ACTUAL_DURATION-128, g);
-        f = daisysp::fmax(1.f, f);
-        int prev = 32, curr;
-        for (uint32_t i = 0; i < 128; i++)
-        {
-            curr = -buffer[int(i*f) + int(g)]*20 + 44;
-            patch.display.DrawLine(i, prev, i, curr, true);
-            prev = curr;
-        }
-
-        patch.display.DrawLine(128 * ctrls[2], 36,
-                               128 * ctrls[2], 60,
-                               true);
-        patch.display.DrawLine(64 * (ctrls[1] + ctrls[2]), 60,
-                               64 * (ctrls[1] + ctrls[2]), 36,
-                               true);
-
         patch.display.SetCursor(0, 0);
         std::string str = "GRAIN2";
         char *cstr = &str[0];
@@ -393,42 +318,18 @@ void UpdateOled()
         str = std::to_string(int(ctrls[0] * 100.f));
         patch.display.WriteString(cstr, Font_6x8, true);
 
-        /*patch.display.SetCursor(30, 15);
-        str = std::to_string(int(ctrls[1] * 100.f));
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        patch.display.SetCursor(70, 15);
-        str = std::to_string(int(ctrls[2] * 100.f));
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        patch.display.SetCursor(70, 0);
-        str = std::to_string(int(ctrls[3] * 100.f));
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        patch.display.SetCursor(0, 50);
-        str = std::to_string(uint32_t(ctrls[2] * ACTUAL_DURATION));
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        patch.display.SetCursor(0, 40);
-        str = std::to_string(ACTUAL_DURATION);
-        patch.display.WriteString(cstr, Font_6x8, true);
-        */
-
         break;
     }
-    case REVERB:
+    case FX:
     {
+        patch.display.Fill(false);
         patch.display.SetCursor(0, 0);
         std::string str = "FX";
         char *cstr = &str[0];
         patch.display.WriteString(cstr, Font_6x8, true);
 
         patch.display.SetCursor(0, 40);
-        str = std::to_string(int(ctrls[0] * 100)) + "%";
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        patch.display.SetCursor(30, 40);
-        str = std::to_string(int(ctrls[1])) + "Hz";
+        str = std::to_string(int(ctrls[2] * 100.f));
         patch.display.WriteString(cstr, Font_6x8, true);
 
         break;
@@ -442,28 +343,30 @@ void UpdateOled()
 }
 
 int main(void)
-{
-    patch.Init();
+{    patch.Init();
 
     patch.display.Fill(false);
     patch.display.Update();
-    patch.SetAudioBlockSize(48);
-    patch.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
+
+    patch.controls[0].SetCoeff(0.5);
+    patch.controls[1].SetCoeff(0.5);
+    patch.controls[2].SetCoeff(0.5);
+    patch.controls[3].SetCoeff(0.5);
+
+    patch.SetAudioBlockSize(16);
+    patch.SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate::SAI_48KHZ);
 
     gran.init(&buffer[0], BUFFER_SIZE);
     std::fill(&buffer[0], &buffer[BUFFER_SIZE - 1], 0.f);
 
-    rev.Init(48000);
-    rev.SetLpFreq(10000);
-    rev.SetFeedback(0.6);
+    fShift.init(48000);
 
-    SdmmcHandler::Config sd_cfg;
-    sd_cfg.speed = SdmmcHandler::Speed::MEDIUM_SLOW;
-    sd_cfg.width = SdmmcHandler::BusWidth::BITS_4;
+    daisy::SdmmcHandler::Config sd_cfg;
+    sd_cfg.speed = daisy::SdmmcHandler::Speed::MEDIUM_SLOW;
+    sd_cfg.width = daisy::SdmmcHandler::BusWidth::BITS_4;
     sdcard.Init(sd_cfg);
 
-    // Link hardware and FatFS
-    fsi.Init(FatFSInterface::Config::MEDIA_SD);
+    fsi.Init(daisy::FatFSInterface::Config::MEDIA_SD);
 
     loadWavFiles();
 
