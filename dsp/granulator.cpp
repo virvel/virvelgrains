@@ -18,36 +18,6 @@ float dsp::Grain::play() {
     }
 
     if (m_active ) {
-        uint32_t int_pos = static_cast<uint32_t>(m_position);
-
-        float frac = m_position - int_pos;
-
-        auto c = float(int_pos%m_duration)/float(m_duration);
-        c = sin(M_PI* c);
-
-        float a = m_buf[((int_pos) + m_offset) % m_size];
-        float b = m_buf[(((int_pos + 1) %  m_duration) + m_offset) % m_size];
-
-        float out = (a + frac * (a - b));
-        m_position = m_position + m_rate;
-        return out;
-    }
-    else
-    {
-        m_position = 0.f;
-        m_offset = m_next_offset;
-        m_active = true;
-        return 0.f;
-    }
-}
-
-float dsp::Grain::playHermite() {
-    
-    if (m_position >= m_duration) {
-        m_active = false;
-    }
-
-    if (m_active ) {
 
         m_position = m_position + m_rate;
 
@@ -145,7 +115,7 @@ float dsp::Granulator::play() {
 
     auto sig = 0.f;
     for (auto &g: m_grains) {
-        sig += g.playHermite();
+        sig += g.play();
     }
     return sig;
 }

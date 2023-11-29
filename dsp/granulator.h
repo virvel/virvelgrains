@@ -10,7 +10,6 @@ namespace dsp {
     public:
         void init(float * const buffer, uint32_t size);
         float play();
-        float playHermite();
         void setActive(const bool active) { m_active = active; }
         void setRate(const float rate) { m_rate = rate; }
         void setOffset(const float pos) { m_next_offset = static_cast<uint32_t>(daisysp::fmin(pos * float((m_size - m_duration)), float(m_size - m_duration))); }

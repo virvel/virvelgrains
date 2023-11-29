@@ -1,7 +1,6 @@
 #include "daisy_patch.h"
 #include "daisysp.h"
 #include "granulator.h"
-#include "frequencyshifter.h"
 #include <cmath>
 
 daisy::DaisyPatch patch;
