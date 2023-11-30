@@ -213,24 +213,24 @@ void UpdateControls()
     float ctrl3 = patch.GetKnobValue((daisy::DaisyPatch::Ctrl)3);
 
     if (abs(ctrls[0] - ctrl0) > 0.001) {
-        if (ctrl0 < 0.001)
+        if (ctrl0 < 0.0001)
             ctrl0 = 0.f;
         ctrls[0] = ctrl0;
     }
     if (abs(ctrls[1] - ctrl1) > 0.001) {
-        if (ctrl1 < 0.001)
+        if (ctrl1 < 0.0001)
             ctrl1 = 0.f;
         ctrls[1] = ctrl1;
     }
     
     if (abs(ctrls[2] - ctrl2) > 0.001) {
-        if (ctrl2 < 0.001)
+        if (ctrl2 < 0.0001)
             ctrl2 = 0.f;
         ctrls[2] = ctrl2;
     }
 
     if (abs(ctrls[3] - ctrl3) > 0.001) {
-        if (ctrl3 < 0.01)
+        if (ctrl3 < 0.0001)
             ctrl3 = 0.f;
         ctrls[3] = ctrl3;
     }
@@ -246,7 +246,7 @@ void UpdateControls()
         }
         case GRAIN2:
         {
-            gran.setJitter(ctrls[0]* static_cast<float>(ACTUAL_DURATION));
+            gran.setJitter(ctrls[0]);
             break;
         }
         case FX:
@@ -350,7 +350,8 @@ void UpdateOled()
     patch.display.Update();
 }
 
-int main(void){    patch.Init();
+int main(void){
+    patch.Init();
 
     patch.display.Fill(false);
     patch.display.Update();

@@ -1,10 +1,14 @@
 # Project Name
-TARGET = daisysamples
+TARGET = virvelgranulator
 
 USE_FATFS=1
 
+VIRVELDSP = virveldsp/src
+
 # Sources
-CPP_SOURCES = daisygrains.cpp dsp/granulator.cpp dsp/frequencyshifter.cpp
+CPP_SOURCES = virvelgranulator.cpp \
+			  $(VIRVELDSP)/granulator.cpp \
+			  $(VIRVELDSP)/frequencyshifter.cpp
 
 # Library Locations
 LIBDAISY_DIR = libDaisy
@@ -24,4 +28,4 @@ C_INCLUDES += \
 SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
 include $(SYSTEM_FILES_DIR)/Makefile
 
-CPPFLAGS += -I./dsp
+CPPFLAGS += -I./$(VIRVELDSP)
