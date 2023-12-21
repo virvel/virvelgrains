@@ -93,6 +93,7 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
     }
 
     float revL, revR;
+    float granL, granR;
     for (size_t i = 0; i < size; ++i)
     {
         if (gate)
@@ -101,8 +102,9 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
             buffer[BUFFER_SIZE / 2 + n] = in[1][i];
         }
         n = (n + 1) % ACTUAL_DURATION;
-        out[0][i] = ctrls[3] * gran.play();
-        out[1][i] = out[0][i];
+        gran.play(&granL, &granR);
+        out[0][i] = ctrls[3] * granL;
+        out[1][i] = ctrls[3] * granR;
         rev.Process(out[0][i], out[1][i], &revL, &revR );
         out[0][i] += revL;
         out[1][i] += revR;

@@ -74,5 +74,6 @@
         "__verbose_abort": "cpp",
         "charconv": "cpp",
         "version": "cpp"
-    }
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }
