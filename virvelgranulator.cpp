@@ -7,13 +7,10 @@ daisy::DaisyPatch patch;
 constexpr uint32_t BUFFER_SIZE = 8 * 1024 * 1024;
 dsp::Granulator gran;
 
-daisysp::ReverbSc rev;
-
 enum DISPLAYVALS
 {
     GRAIN1,
-    GRAIN2,
-    FX
+    GRAIN2
 };
 
 DISPLAYVALS display = GRAIN1;
@@ -92,7 +89,6 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
         out[3][i] = 0.f;
     }
 
-    float revL, revR;
     float granL, granR;
     for (size_t i = 0; i < size; ++i)
     {
@@ -102,12 +98,11 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
             buffer[BUFFER_SIZE / 2 + n] = in[1][i];
         }
         n = (n + 1) % ACTUAL_DURATION;
+        granL = 0.f;
+        granR = 0.f;
         gran.play(&granL, &granR);
         out[0][i] = ctrls[3] * granL;
         out[1][i] = ctrls[3] * granR;
-        rev.Process(out[0][i], out[1][i], &revL, &revR );
-        out[0][i] += revL;
-        out[1][i] += revR;
     }
     
 }
@@ -206,8 +201,7 @@ void UpdateControls()
 
     gate = patch.gate_input[0].State();
 
-    if (patch.encoder.RisingEdge())
-        display = DISPLAYVALS((int(display) + 1) % 3);
+    display = DISPLAYVALS((display + (int(patch.encoder.Increment()))) % 3);
 
     float ctrl0 = patch.GetKnobValue((daisy::DaisyPatch::Ctrl)0);
     float ctrl1 = patch.GetKnobValue((daisy::DaisyPatch::Ctrl)1);
@@ -251,14 +245,6 @@ void UpdateControls()
             gran.setJitter(ctrls[0]);
             break;
         }
-        case FX:
-        {
-            auto mtof = [](const float n) { return 1. * powf(2.f,48.f*n/12.f);};
-            //fShift.frequency(mtof(ctrls[2]));
-            rev.SetFeedback(ctrls[0]);
-            rev.SetLpFreq(ctrls[1]*10000.f);
-            break;
-        }
 
         default:
             break;
@@ -296,7 +282,7 @@ void UpdateOled()
         patch.display.WriteString(cstr, Font_6x8, true);
 
         patch.display.SetCursor(0, 15);
-        str = std::to_string(int(ctrls[0] * 100.f));
+        str = std::to_string(int(ctrls[0] * 100.f)) + "%";
         patch.display.WriteString(cstr, Font_6x8, true);
 
         patch.display.SetCursor(30, 15);
@@ -326,7 +312,7 @@ void UpdateOled()
 
         break;
     }
-    case FX:
+/*/    case 0:
     {
         patch.display.Fill(false);
         patch.display.SetCursor(0, 0);
@@ -344,6 +330,7 @@ void UpdateOled()
 
         break;
     }
+    */
 
     default:
         break;
@@ -369,9 +356,9 @@ int main(void){
     gran.init(&buffer[0], BUFFER_SIZE);
     std::fill(&buffer[0], &buffer[BUFFER_SIZE - 1], 0.f);
 
-    rev.Init(48000);
-    rev.SetFeedback(0.5);
-    rev.SetLpFreq(5000);
+    //rev.Init(48000);
+    //rev.SetFeedback(0.5);
+    //rev.SetLpFreq(5000);
 
     daisy::SdmmcHandler::Config sd_cfg;
     sd_cfg.speed = daisy::SdmmcHandler::Speed::MEDIUM_SLOW;
