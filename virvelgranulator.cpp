@@ -1,6 +1,7 @@
 #include "daisy_patch.h"
 #include "daisysp.h"
 #include "granulator.h"
+#include "reverb.h"
 #include <cmath>
 
 daisy::DaisyPatch patch;
@@ -14,6 +15,7 @@ enum DISPLAYVALS
 };
 
 DISPLAYVALS display = GRAIN1;
+dsp::reverb rev;
 
 uint32_t n = 0;
 bool gate = false;
@@ -90,6 +92,7 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
     }
 
     float granL, granR;
+    float revL, revR;
     for (size_t i = 0; i < size; ++i)
     {
         if (gate)
@@ -103,6 +106,9 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
         gran.play(&granL, &granR);
         out[0][i] = ctrls[3] * granL;
         out[1][i] = ctrls[3] * granR;
+        rev.process(0.125f*out[0][i], 0.125f*out[1][i], &revL, &revR);
+        out[0][i] += 0.5f * revL;
+        out[1][i] += 0.5f * revR;
     }
     
 }
@@ -356,9 +362,7 @@ int main(void){
     gran.init(&buffer[0], BUFFER_SIZE);
     std::fill(&buffer[0], &buffer[BUFFER_SIZE - 1], 0.f);
 
-    //rev.Init(48000);
-    //rev.SetFeedback(0.5);
-    //rev.SetLpFreq(5000);
+    rev.init();
 
     daisy::SdmmcHandler::Config sd_cfg;
     sd_cfg.speed = daisy::SdmmcHandler::Speed::MEDIUM_SLOW;
