@@ -97,8 +97,8 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
     {
         if (gate)
         {
-            buffer[n] = in[0][i];
-            buffer[BUFFER_SIZE / 2 + n] = in[1][i];
+            buffer[n] = tanhf(in[0][i]);
+            buffer[BUFFER_SIZE / 2 + n] = tanhf(in[1][i]);
         }
         n = (n + 1) % ACTUAL_DURATION;
         granL = 0.f;
@@ -107,8 +107,8 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
         out[0][i] = ctrls[3] * granL;
         out[1][i] = ctrls[3] * granR;
         rev.process(0.125f*out[0][i], 0.125f*out[1][i], &revL, &revR);
-        out[0][i] += 0.5f * revL;
-        out[1][i] += 0.5f * revR;
+        out[0][i] += 0.75f * revL;
+        out[1][i] += 0.75f * revR;
     }
     
 }
