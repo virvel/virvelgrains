@@ -5,13 +5,14 @@
 #include <cmath>
 
 daisy::DaisyPatch patch;
-constexpr uint32_t BUFFER_SIZE = 8 * 1024 * 1024;
+constexpr uint32_t BUFFER_SIZE = 2*48000*160;
 dsp::Granulator gran;
 
 enum DISPLAYVALS
 {
     GRAIN1,
-    GRAIN2
+    GRAIN2,
+    FX
 };
 
 DISPLAYVALS display = GRAIN1;
@@ -22,6 +23,8 @@ bool gate = false;
 uint32_t ACTUAL_DURATION = 0;
 
 float ctrls[4] = {0.f, 0.f, 0.f, 0.f};
+float params[8] = {0.f, 2.f, 3.14f, 0.5f, 0.f, 0.f, 0.f, 0.f};
+bool tog;
 
 DSY_SDRAM_BSS float buffer[BUFFER_SIZE];
 
@@ -106,9 +109,9 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
         gran.play(&granL, &granR);
         out[0][i] = ctrls[3] * granL;
         out[1][i] = ctrls[3] * granR;
-        rev.process(0.125f*out[0][i], 0.125f*out[1][i], &revL, &revR);
-        out[0][i] += 0.75f * revL;
-        out[1][i] += 0.75f * revR;
+        rev.process(0.125f*in[2][i], 0.125f*in[3][i], &revL, &revR);
+        out[2][i] += 0.75f * revL;
+        out[3][i] += 0.75f * revR;
     }
     
 }
@@ -207,7 +210,12 @@ void UpdateControls()
 
     gate = patch.gate_input[0].State();
 
-    display = DISPLAYVALS((display + (int(patch.encoder.Increment()))) % 3);
+    tog ^= patch.encoder.RisingEdge();
+
+    if (!tog)
+        display = DISPLAYVALS((display + (patch.encoder.Increment())) % 9);
+    else
+        params[display-1] = fmax(-1.0471975512f, fmin(params[display-1] - static_cast<float>(patch.encoder.Increment())/10.f,4.1887902048f));
 
     float ctrl0 = patch.GetKnobValue((daisy::DaisyPatch::Ctrl)0);
     float ctrl1 = patch.GetKnobValue((daisy::DaisyPatch::Ctrl)1);
@@ -237,109 +245,115 @@ void UpdateControls()
         ctrls[3] = ctrl3;
     }
     
-    switch (display) {
-        case GRAIN1:
-        {
-            gran.setRate(ctrls[0]);
-            gran.setOffset(ctrls[1]);
-            gran.setDuration(ctrls[2]);
-            
-            break;
-        }
-        case GRAIN2:
-        {
-            gran.setJitter(ctrls[0]);
-            break;
-        }
+    gran.setRate(ctrls[0]);
+    gran.setOffset(ctrls[1]);
+    gran.setDuration(ctrls[2]);  
 
-        default:
-            break;
-        }
 }
 
 void UpdateOled()
 {
-
     patch.display.Fill(false);
 
+    std::string str;
+    char *cstr = &str[0];
+
+    patch.display.SetCursor(0, 2);
+    str = std::to_string(int(ctrls[0] * 100.f)) + "." + std::to_string(int(ctrls[0]*1000.f)%10);
+    patch.display.WriteString(cstr, Font_6x8, true);
+
+    patch.display.SetCursor(30, 2);
+    str = std::to_string(int(ctrls[1] * 100.f)) + "." + std::to_string(int(ctrls[1]*1000.f)%10);
+    patch.display.WriteString(cstr, Font_6x8, true);
+
+    patch.display.SetCursor(60, 2);
+    str = std::to_string(int(ctrls[2] * 100.f)) + "." + std::to_string(int(ctrls[2]*1000.f)%10);
+    patch.display.WriteString(cstr, Font_6x8, true);
+
+    patch.display.SetCursor(90, 2);
+    str = std::to_string(int(ctrls[3] * 100.f)) + "." + std::to_string(int(ctrls[3]*1000.f)%10);
+    patch.display.WriteString(cstr, Font_6x8, true);
+
+    if (display == 1 or display == 5)
+        patch.display.DrawRect(2,15, 2+28,45, true);
+    if (display == 2 or display == 6)
+        patch.display.DrawRect(32,15, 32+28,45, true);
+    if (display == 3 or display == 7)
+        patch.display.DrawRect(64,15, 64+28,45, true);
+    if (display == 4 or display == 8)
+        patch.display.DrawRect(96,15, 96+28,45, true);
+
+
+    if (display == 0)
+    {
 
         float g = ctrls[1] * ACTUAL_DURATION;
         float f = ((ACTUAL_DURATION-g)/128 - 1) * ctrls[2] + 1;
 
         g = daisysp::fmin(ACTUAL_DURATION-128, g);
         f = daisysp::fmax(1.f, f);
-        int prev = 32, curr;
+        int prev = 44, curr;
         for (uint32_t i = 0; i < 128; i++)
         {
             curr = -buffer[int(i*f) + int(g)]*20 + 44;
             patch.display.DrawLine(i, prev, i, curr, true);
             prev = curr;
         }
-
-    switch (display)
-    {
-
-    case GRAIN1:
-    {
-
-        patch.display.SetCursor(0, 0);
-        std::string str = "Yoyo";
-        char *cstr = &str[0];
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        patch.display.SetCursor(0, 15);
-        str = std::to_string(int(ctrls[0] * 100.f)) + "%";
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        patch.display.SetCursor(30, 15);
-        str = std::to_string(int(ctrls[1] * 100.f));
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        patch.display.SetCursor(70, 15);
-        str = std::to_string(int(ctrls[2] * 100.f));
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        patch.display.SetCursor(70, 0);
-        str = std::to_string(int(ctrls[3] * 100.f));
-        patch.display.WriteString(cstr, Font_6x8, true);
-
-        break;
     }
-    case GRAIN2:
+
+    else if (display == 1 or display == 2 or display == 3 or display == 4)
     {
-        patch.display.SetCursor(0, 0);
-        std::string str = "GRAIN2";
-        char *cstr = &str[0];
+        patch.display.DrawCircle(16, 30, 10, true);
+        patch.display.DrawLine(16,30, 16 + 10*cosf(params[0]), 30 -10*sinf(params[0]), true);
+        patch.display.SetCursor(2, 49);
+        str = "Spray";
         patch.display.WriteString(cstr, Font_6x8, true);
 
-        patch.display.SetCursor(0, 15);
-        str = std::to_string(int(ctrls[0] * 100.f));
+        patch.display.DrawCircle(46, 30, 10, true);
+        patch.display.DrawLine(46,30, 46 + 10*cosf(params[1]), 30 -10*sinf(params[1]), true);
+        patch.display.SetCursor(32, 49);
+        str = "Dens";
         patch.display.WriteString(cstr, Font_6x8, true);
 
-        break;
+        patch.display.DrawCircle(78, 30, 10, true); 
+        patch.display.DrawLine(78,30, 78 + 10*cosf(params[2]), 30 - 10*sinf(params[2]), true);
+        patch.display.SetCursor(64, 49);
+        str = "Pitch";
+        patch.display.WriteString(cstr, Font_6x8, true);
+
+        patch.display.DrawCircle(110, 30, 10, true);
+        patch.display.DrawLine(110,30, 110 + 10*cosf(params[3]), 30 - 10*sinf(params[3]), true);
+        patch.display.SetCursor(96, 49);
+        str = "Que";
+        patch.display.WriteString(cstr, Font_6x8, true);
     }
-/*/    case 0:
+
+    else if (display == 5 or display == 6 or display== 7 or display== 8)
     {
-        patch.display.Fill(false);
-        patch.display.SetCursor(0, 0);
-        std::string str = "FX";
-        char *cstr = &str[0];
+
+        patch.display.DrawCircle(16, 30, 10, true);
+        patch.display.DrawLine(16,30, 16 + 10*cosf(params[4]), 30 -10*sinf(params[4]), true);
+        patch.display.SetCursor(2, 49);
+        str = "FB";
         patch.display.WriteString(cstr, Font_6x8, true);
 
-        patch.display.SetCursor(0, 20);
-        str = std::to_string(int(ctrls[0] * 100.f));
+        patch.display.DrawCircle(46, 30, 10, true);
+        patch.display.DrawLine(46,30, 46 + 10*cosf(params[5]), 30 -10*sinf(params[5]), true);
+        patch.display.SetCursor(32, 49);
+        str = "LP";
         patch.display.WriteString(cstr, Font_6x8, true);
 
-        patch.display.SetCursor(0, 40);
-        str = std::to_string(int(ctrls[1] * 100.f));
+        patch.display.DrawCircle(78, 30, 10, true);
+        patch.display.DrawLine(78,30, 78 + 10*cosf(params[6]), 30 - 10*sinf(params[6]), true);
+        patch.display.SetCursor(64, 49);
+        str = "D/W";
         patch.display.WriteString(cstr, Font_6x8, true);
 
-        break;
-    }
-    */
-
-    default:
-        break;
+        patch.display.DrawCircle(110, 30, 10, true);
+        patch.display.DrawLine(110,30, 110 + 10*cosf(params[7]), 30 - 10*sinf(params[7]), true);
+        patch.display.SetCursor(96, 49);
+        str = "Aux";
+        patch.display.WriteString(cstr, Font_6x8, true);
     }
 
     patch.display.Update();
@@ -351,10 +365,10 @@ int main(void){
     patch.display.Fill(false);
     patch.display.Update();
 
-    patch.controls[0].SetCoeff(0.5);
-    patch.controls[1].SetCoeff(0.5);
-    patch.controls[2].SetCoeff(0.5);
-    patch.controls[3].SetCoeff(0.5);
+    patch.controls[0].SetCoeff(0.1);
+    patch.controls[1].SetCoeff(0.1);
+    patch.controls[2].SetCoeff(0.1);
+    patch.controls[3].SetCoeff(0.1);
 
     patch.SetAudioBlockSize(48);
     patch.SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate::SAI_48KHZ);
