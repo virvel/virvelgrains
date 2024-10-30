@@ -37,11 +37,11 @@ daisy::WavFileInfo m_file_info_[maxFiles];
 int m_file_sizes[maxFiles];
 
 struct waveFile {
+    uint32_t samplerate;
+    uint32_t num_samples;
     uint16_t format;
     uint16_t channels;
-    uint32_t samplerate;
     uint16_t bitrate;
-    uint32_t num_samples;
     uint16_t header_size;
 };
 
